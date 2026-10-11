@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نظام إجازات الفريق - Almarai LeaveTracker</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- مكتبة إرسال رمز التحقق (EmailJS) -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@5/dist/email.min.js"></script>
+</head>
+<body>
+
+  <!-- ============ شاشة الدخول / التسجيل ============ -->
+  <div id="authScreen" class="screen">
+    <div class="card">
+      <div class="logo">
+        <div class="logo-circle">AI</div>
+        <h1>نظام إجازات الفريق</h1>
+        <p class="subtitle">Almarai LeaveTracker</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="login">تسجيل الدخول</button>
+        <button class="tab" data-tab="register">حساب جديد</button>
+      </div>
+
+      <!-- تسجيل الدخول -->
+      <form id="loginForm" class="form" style="display:block">
+        <label>الاسم أو البريد الإلكتروني</label>
+        <input type="text" id="loginName" placeholder="مثال: يوسف" required />
+
+        <label>كلمة المرور</label>
+        <input type="password" id="loginPassword" placeholder="********" required />
+
+        <div id="loginError" class="error"></div>
+        <button type="submit" class="btn primary">دخول</button>
+      </form>
+
+      <!-- حساب جديد -->
+      <form id="registerForm" class="form" style="display:none">
+        <label>الاسم الكامل</label>
+        <input type="text" id="regName" placeholder="مثال: يوسف الشمري" required />
+
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="regEmail" placeholder="name@example.com" required />
+
+        <label>الفريق</label>
+        <select id="regTeam" required></select>
+
+        <label>كلمة المرور</label>
+        <input type="password" id="regPassword" placeholder="8 أحرف + حرف كبير + صغير + رمز" required />
+        <ul class="rules">
+          <li id="ruleLen">8 أحرف على الأقل</li>
+          <li id="ruleUpper">حرف كبير (A-Z)</li>
+          <li id="ruleLower">حرف صغير (a-z)</li>
+          <li id="ruleSpecial">رمز خاص (!@#...)</li>
+        </ul>
+
+        <label>تأكيد كلمة المرور</label>
+        <input type="password" id="regConfirm" placeholder="أعد كتابة كلمة المرور" required />
+
+        <div id="regError" class="error"></div>
+        <button type="submit" class="btn primary">إنشاء الحساب</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ شاشة رمز التحقق ============ -->
+  <div id="otpScreen" class="screen" style="display:none">
+    <div class="card">
+      <h2>رمز التحقق</h2>
+      <p class="subtitle" id="otpHint">أدخل الرمز المكون من 6 أرقام المرسل إلى بريدك</p>
+
+            <input type="text" id="otpInput" maxlength="6" placeholder="_ _ _ _ _ _" class="otp-input" />
+
+      <div id="otpError" class="error"></div>
+      <button id="otpVerifyBtn" class="btn primary">تحقق</button>
+      <button id="otpResendBtn" class="btn ghost">إعادة إرسال الرمز</button>
+      <div id="otpSending" class="sending" style="display:none">جاري إرسال الرمز إلى بريدك...</div>
+    </div>
+  </div>
+
+  <!-- ============ التطبيق بعد الدخول ============ -->
+  <div id="appScreen" style="display:none">
+    <header class="topbar">
+      <div class="brand">نظام إجازات الفريق</div>
+      <nav class="nav" id="mainNav">
+        <button class="nav-btn active" data-sec="home">حجز إجازة</button>
+        <button class="nav-btn" data-sec="balance">رصيدي</button>
+        <button class="nav-btn" data-sec="calendar">التقويم</button>
+        <button class="nav-btn" data-sec="approvals" id="approvalsNav" style="display:none">الموافقات</button>
+        <button class="nav-btn" data-sec="admin" id="adminNav" style="display:none">الإدارة</button>
+      </nav>
+      <div class="user-chip" id="userChip"></div>
+      <button id="logoutBtn" class="btn ghost small">خروج</button>
+    </header>
+
+    <main class="container">
+
+      <!-- ===== حجز إجازة + طلباتي ===== -->
+      <section id="sec-home">
+        <div class="card full">
+          <h2>حجز إجازة</h2>
+          <form id="leaveForm" class="form grid2">
+            <div>
+              <label>نوع الإجازة</label>
+              <select id="lvType"></select>
+            </div>
+            <div>
+              <label>عدد الأيام</label>
+              <input type="text" id="lvDays" value="0" disabled />
+            </div>
+            <div>
+              <label>من تاريخ</label>
+              <input type="date" id="lvStart" required />
+            </div>
+            <div>
+              <label>إلى تاريخ</label>
+              <input type="date" id="lvEnd" required />
+            </div>
+            <div class="span2">
+              <label>ملاحظات للمدير (اختياري)</label>
+              <textarea id="lvComments" rows="2" placeholder="مثال: مرفق تقرير طبي"></textarea>
+            </div>
+            <div class="span2">
+              <label>إرفاق تقرير (اختياري)</label>
+              <input type="file" id="lvAttachment" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" />
+            </div>
+            <div class="span2">
+              <div id="leaveError" class="error"></div>
+              <button type="submit" class="btn primary">إرسال الطلب للموافقة</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card full">
+          <h2>طلباتي</h2>
+          <div class="table-wrap">
+            <table id="myLeavesTable">
+              <thead>
+                <tr><th>النوع</th><th>من</th><th>إلى</th><th>الأيام</th><th>الحالة</th><th></th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="empty" id="myLeavesEmpty">لا توجد طلبات بعد</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== الرصيد ===== -->
+      <section id="sec-balance" style="display:none">
+        <div class="card full">
+          <h2>رصيدي</h2>
+          <div class="balances" id="balancesBox"></div>
+          <p class="subtitle">السنوية والمرضية 30 يوماً لكل نوع - يُخصم الرصيد عند الموافقة فقط</p>
+        </div>
+      </section>
+
+      <!-- ===== التقويم ===== -->
+      <section id="sec-calendar" style="display:none">
+        <div class="card full">
+          <div class="cal-head">
+            <h2>تقويم الفريق</h2>
+            <div class="cal-nav">
+              <button id="calPrev" class="btn ghost small">السابق</button>
+              <span id="calLabel"></span>
+              <button id="calNext" class="btn ghost small">التالي</button>
+            </div>
+          </div>
+          <div class="legend" id="legend"></div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
+      </section>
+
+      <!-- ===== الموافقات ===== -->
+      <section id="sec-approvals" style="display:none">
+        <div class="card full">
+          <h2>طلبات بانتظار الموافقة</h2>
+          <div class="table-wrap">
+            <table id="approvalsTable">
+              <thead>
+                <tr><th>الموظف</th><th>النوع</th><th>من</th><th>إلى</th><th>الأيام</th><th>ملاحظات</th><th>الإجراء</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="empty" id="approvalsEmpty">لا توجد طلبات معلقة</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== الإدارة ===== -->
+      <section id="sec-admin" style="display:none">
+        <div class="card full">
+          <h2>إدارة المستخدمين والأدوار</h2>
+          <p class="subtitle">حدد دور كل مستخدم: موظف يقدّم الطلبات فقط، مدير يوافق على طلبات فريقه، مدير عام يدير كل شيء</p>
+          <div class="table-wrap">
+            <table id="usersTable">
+              <thead>
+                <tr><th>الاسم</th><th>البريد الإلكتروني</th><th>الفريق</th><th>الدور</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="empty" id="usersEmpty">لا يوجد مستخدمون</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- خدمات خارجية -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+  <script src="app.js"></script>
+  <script src="system.js"></script>
+</body>
+</html>
