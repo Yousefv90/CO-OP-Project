@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>نظام إجازات الفريق - Almarai LeaveTracker</title>
   <link rel="stylesheet" href="style.css" />
-
-  <!-- مكتبة إرسال رمز التحقق (EmailJS) -->
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@5/dist/email.min.js"></script>
 </head>
 <body>
 
@@ -72,7 +69,7 @@
       <h2>رمز التحقق</h2>
       <p class="subtitle" id="otpHint">أدخل الرمز المكون من 6 أرقام المرسل إلى بريدك</p>
 
-            <input type="text" id="otpInput" maxlength="6" placeholder="_ _ _ _ _ _" class="otp-input" />
+      <input type="text" id="otpInput" maxlength="6" placeholder="_ _ _ _ _ _" class="otp-input" />
 
       <div id="otpError" class="error"></div>
       <button id="otpVerifyBtn" class="btn primary">تحقق</button>
@@ -124,8 +121,8 @@
               <textarea id="lvComments" rows="2" placeholder="مثال: مرفق تقرير طبي"></textarea>
             </div>
             <div class="span2">
-              <label>إرفاق تقرير (اختياري)</label>
-              <input type="file" id="lvAttachment" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" />
+              <label>مرفق (صورة أو مستند - اختياري)</label>
+              <input type="file" id="lvAttachment" accept="image/*,.pdf" />
             </div>
             <div class="span2">
               <div id="leaveError" class="error"></div>
@@ -153,7 +150,7 @@
         <div class="card full">
           <h2>رصيدي</h2>
           <div class="balances" id="balancesBox"></div>
-          <p class="subtitle">السنوية والمرضية 30 يوماً لكل نوع - يُخصم الرصيد عند الموافقة فقط</p>
+          <p class="subtitle">السنوية 30 يوماً + 10 أعياد رسمية - المرضية: أول 30 يوم براتب كامل، 60 يوم بـ75% من الراتب، 30 يوم بدون راتب - يُخصم الرصيد عند الموافقة فقط</p>
         </div>
       </section>
 
@@ -189,19 +186,18 @@
         </div>
       </section>
 
-      <!-- ===== الإدارة ===== -->
+      <!-- ===== الإدارة (للأدمن) ===== -->
       <section id="sec-admin" style="display:none">
         <div class="card full">
-          <h2>إدارة المستخدمين والأدوار</h2>
-          <p class="subtitle">حدد دور كل مستخدم: موظف يقدّم الطلبات فقط، مدير يوافق على طلبات فريقه، مدير عام يدير كل شيء</p>
+          <h2>إدارة الصلاحيات</h2>
+          <p class="subtitle">عيّن صلاحية "مدير" لمن تريده قادراً على قبول أو رفض طلبات الإجازات (المدير يشوف طلبات فريقه فقط، والأدمن يشوف الكل)</p>
           <div class="table-wrap">
-            <table id="usersTable">
+            <table id="adminUsersTable">
               <thead>
-                <tr><th>الاسم</th><th>البريد الإلكتروني</th><th>الفريق</th><th>الدور</th></tr>
+                <tr><th>الاسم</th><th>البريد</th><th>الفريق</th><th>الصلاحية</th><th></th></tr>
               </thead>
               <tbody></tbody>
             </table>
-            <p class="empty" id="usersEmpty">لا يوجد مستخدمون</p>
           </div>
         </div>
       </section>
@@ -212,7 +208,8 @@
   <!-- خدمات خارجية -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script src="config.js"></script>
   <script src="app.js"></script>
   <script src="system.js"></script>
 </body>

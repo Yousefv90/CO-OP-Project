@@ -2,6 +2,7 @@
    نظام إجازات الفريق - واجهات التطبيق
    (حجز إجازة، طلباتي، الرصيد، التقويم، الموافقات)
    ===================================================== */
+/* eslint-disable no-undef */
 
 // أنواع الإجازات وألوانها
 const LEAVE_TYPES = {
@@ -28,16 +29,79 @@ const daysBetween = (a, b) =>
 
 let calMonth = new Date();
 
+/* ===== المرفقات (base64 داخل Firestore - بديل مجاني عن Storage) ===== */
+
+const MAX_ATTACHMENT = 700 * 1024; // ~700KB بعد التحويل (حد المستند في Firestore هو 1MB)
+
+function readAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+// ضغط الصورة قبل الحفظ حتى تصغر وتدخل في Firestore
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const maxSide = 1200;
+      let w = img.width, h = img.height;
+      if (w > maxSide || h > maxSide) {
+        const k = maxSide / Math.max(w, h);
+        w = Math.round(w * k); h = Math.round(h * k);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function prepareAttachment(file) {
+  let dataUrl;
+  if (file.type.startsWith("image/")) {
+    dataUrl = await compressImage(file);
+  } else {
+    if (file.size > MAX_ATTACHMENT) throw new Error("big");
+    dataUrl = await readAsDataURL(file);
+  }
+  if (dataUrl.length > MAX_ATTACHMENT) throw new Error("big");
+  return { data: dataUrl, name: file.name };
+}
+
+// فتح المرفق من السجل
+function openAttachment(dataUrl) {
+  try {
+    const [meta, b64] = dataUrl.split(",");
+    const mime = (meta.match(/data:(.*?);base64/) || [])[1] || "application/octet-stream";
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    window.open(URL.createObjectURL(new Blob([bytes], { type: mime })), "_blank");
+  } catch (e) {
+    window.open(dataUrl, "_blank");
+  }
+}
+
 /* ===== التنقل بين الأقسام ===== */
 
 document.querySelectorAll(".nav-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
-    ["home", "balance", "calendar", "approvals"].forEach(s =>
+    ["home", "balance", "calendar", "approvals", "admin"].forEach(s =>
       document.getElementById("sec-" + s).style.display = s === btn.dataset.sec ? "block" : "none");
     if (btn.dataset.sec === "calendar") renderCalendar();
     if (btn.dataset.sec === "approvals") renderApprovals();
+    if (btn.dataset.sec === "admin") renderAdmin();
   });
 });
 
@@ -68,22 +132,18 @@ $("leaveForm").addEventListener("submit", async (e) => {
   if (!start || !end) { $("leaveError").textContent = "اختر تاريخ البداية والنهاية"; return; }
   if (end < start) { $("leaveError").textContent = "تاريخ النهاية قبل البداية"; return; }
 
-  // رفع المرفق إن اختير (يتطلب Firebase Storage)
-  let attachmentUrl = "";
-  const attFile = $("lvAttachment").files[0];
-  if (attFile) {
-    if (!useFirebase) { $("leaveError").textContent = "إرفاق الملف متاح فقط مع Firebase"; return; }
-    if (attFile.size > 5 * 1024 * 1024) { $("leaveError").textContent = "حجم الملف أكبر من 5 ميجابايت"; return; }
+  // قراءة وضغط المرفق (إن وجد)
+  let attachment = null;
+  const fileInput = $("lvAttachment");
+  if (fileInput.files && fileInput.files[0]) {
     try {
-      const path = "attachments/" + Date.now() + "_" + attFile.name.replace(/[^\w.\-]/g, "_");
-      const ref = firebase.storage().ref().child(path);
-      await ref.put(attFile);
-      attachmentUrl = await ref.getDownloadURL();
+      attachment = await prepareAttachment(fileInput.files[0]);
     } catch (err) {
-      $("leaveError").textContent = "تعذر رفع المرفق (تأكد من قواعد Firebase Storage)";
+      $("leaveError").textContent = "تعذر إضافة المرفق (جرب صورة أصغر حجماً)";
       return;
     }
   }
+
   await saveLeave({
     email: currentUser.email,
     employee_name: currentUser.name,
@@ -93,12 +153,14 @@ $("leaveForm").addEventListener("submit", async (e) => {
     end_date: end,
     total_days: daysBetween(start, end),
     comments: $("lvComments").value.trim(),
-    attachment_url: attachmentUrl,
+    attachment_data: attachment ? attachment.data : "",
+    attachment_name: attachment ? attachment.name : "",
     status: "pending",
     decided_by: ""
   });
 
   $("leaveForm").reset();
+  fileInput.value = "";
   $("lvDays").value = "0";
   loadMyLeaves();
   alert("تم إرسال الطلب للموافقة");
@@ -117,12 +179,12 @@ async function loadMyLeaves() {
     const st = STATUS[l.status] || { label: l.status, cls: "" };
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><span class="dot" style="background:${t.color}"></span>${t.label}</td>
+      <td><span class="dot" style="background:${t.color}"></span>${t.label}${l.attachment_data ? " 📎" : ""}</td>
       <td>${fmt(l.start_date)}</td>
       <td>${fmt(l.end_date)}</td>
       <td>${l.total_days}</td>
       <td><span class="badge ${st.cls}">${st.label}</span></td>
-      <td>${l.attachment_url ? `<a class="btn ghost small" href="${l.attachment_url}" target="_blank" rel="noopener">المرفق</a> ` : ""}${l.status === "pending" ? `<button class="btn ghost small" data-cancel="${l.id}">إلغاء</button>` : ""}</td>`;
+      <td>${l.status === "pending" ? `<button class="btn ghost small" data-cancel="${l.id}">إلغاء</button>` : ""}</td>`;
     tbody.appendChild(tr);
   });
 
@@ -138,12 +200,26 @@ function renderBalances(myLeaves) {
   const year = new Date().getFullYear();
   const box = $("balancesBox");
   box.innerHTML = "";
-  [["annual", "الإجازات السنوية"], ["sick", "الإجازات المرضية"]].forEach(([key, title]) => {
-    const used = myLeaves
-      .filter(l => l.leave_type === key && l.status === "approved" && l.start_date.startsWith(year))
-      .reduce((s, l) => s + Number(l.total_days || 0), 0);
-    const total = BALANCE[key];
-    const remain = total - used;
+
+  const usedIn = (type) => myLeaves
+    .filter(l => l.leave_type === type && l.status === "approved" && l.start_date.startsWith(year))
+    .reduce((s, l) => s + Number(l.total_days || 0), 0);
+
+  const usedAnnual = usedIn("annual");
+  const usedSick = usedIn("sick");
+
+  // شرائح المرضية: أول 30 يوم براتب كامل، 60 يوم بـ75%، 30 يوم بدون راتب
+  const sick1 = Math.min(usedSick, 30);
+  const sick2 = Math.min(Math.max(usedSick - 30, 0), 60);
+  const sick3 = Math.max(usedSick - 90, 0);
+
+  [
+    ["الإجازات السنوية", usedAnnual, 30],
+    ["المرضية - براتب كامل", sick1, 30],
+    ["المرضية - 75% من الراتب", sick2, 60],
+    ["المرضية - بدون راتب", sick3, 30]
+  ].forEach(([title, used, total]) => {
+    const remain = Math.max(0, total - used);
     const pct = Math.min(100, Math.round((used / total) * 100));
     box.innerHTML += `
       <div class="balance-card">
@@ -174,6 +250,10 @@ async function renderCalendar() {
   const startPad = first.getDay(); // الأحد = 0
   const daysInMonth = new Date(y, m + 1, 0).getDate();
 
+  // تاريخ اليوم بالتوقيت المحلي (وليس UTC)
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
   const weekdays = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
   let html = weekdays.map(w => `<div class="cal-wd">${w}</div>`).join("");
   html += "<div></div>".repeat(startPad);
@@ -187,7 +267,7 @@ async function renderCalendar() {
         style="background:${t.color}">${esc(l.employee_name)}</span>`;
     }).join("");
     const more = dayLeaves.length > 3 ? `<span class="more">+${dayLeaves.length - 3}</span>` : "";
-    const isToday = dateStr === new Date().toISOString().slice(0, 10);
+    const isToday = dateStr === todayStr;
     html += `<div class="cal-cell ${isToday ? "today" : ""}">
       <span class="cal-day">${d}</span>${chips}${more}</div>`;
   }
@@ -226,7 +306,8 @@ async function renderApprovals() {
       <td>${l.total_days}</td>
       <td class="comments">${esc(l.comments || "-")}</td>
       <td class="actions">
-        ${l.attachment_url ? `<a class="btn ghost small" href="${l.attachment_url}" target="_blank" rel="noopener">المرفق</a> ` : ""}<button class="btn primary small" data-approve="${l.id}">موافقة</button>
+        ${l.attachment_data ? `<button class="btn ghost small" data-view="${l.id}">📎 مرفق</button>` : ""}
+        <button class="btn primary small" data-approve="${l.id}">موافقة</button>
         <button class="btn danger small" data-reject="${l.id}">رفض</button>
       </td>`;
     tbody.appendChild(tr);
@@ -236,10 +317,55 @@ async function renderApprovals() {
     b.addEventListener("click", () => decide(b.dataset.approve, "approved")));
   tbody.querySelectorAll("[data-reject]").forEach(b =>
     b.addEventListener("click", () => decide(b.dataset.reject, "rejected")));
+
+  tbody.querySelectorAll("[data-view]").forEach(b =>
+    b.addEventListener("click", async () => {
+      const leaves = await getAllLeaves();
+      const lv = leaves.find(x => String(x.id) === String(b.dataset.view));
+      if (lv && lv.attachment_data) openAttachment(lv.attachment_data);
+    }));
 }
 
 async function decide(id, status) {
   await updateLeave(id, { status, decided_by: currentUser.name });
   renderApprovals();
   loadMyLeaves();
+}
+
+/* ===== الإدارة (للأدمن) ===== */
+
+async function renderAdmin() {
+  const tbody = $("adminUsersTable").querySelector("tbody");
+  tbody.innerHTML = "";
+  const users = await getAllUsers();
+
+  users.forEach(u => {
+    const key = String(u.id || u.email);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${esc(u.name)}</td>
+      <td class="subtitle">${esc(u.email || "-")}</td>
+      <td>${esc(u.team || "-")}</td>
+      <td>
+        <select data-role-for="${key}">
+          <option value="member" ${u.role === "member" ? "selected" : ""}>موظف</option>
+          <option value="manager" ${u.role === "manager" ? "selected" : ""}>مدير</option>
+          <option value="admin" ${u.role === "admin" ? "selected" : ""}>أدمن</option>
+        </select>
+      </td>
+      <td><button class="btn primary small" data-save-role="${key}">حفظ</button></td>`;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll("[data-save-role]").forEach(b =>
+    b.addEventListener("click", async () => {
+      const sel = tbody.querySelector(`[data-role-for="${b.dataset.saveRole}"]`);
+      const allUsers = await getAllUsers();
+      const u = allUsers.find(x => String(x.id || x.email) === b.dataset.saveRole);
+      if (u) {
+        await updateUserRole(u, sel.value);
+        await renderAdmin();
+        alert("تم تحديث الصلاحية");
+      }
+    }));
 }

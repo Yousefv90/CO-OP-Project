@@ -1,23 +1,10 @@
 /* =====================================================
    نظام إجازات الفريق - الإعدادات وطبقة البيانات والدخول
    ===================================================== */
+/* eslint-disable no-undef */
 
-// ====== 1) إعدادات Firebase (قاعدة البيانات NoSQL) ======
-const firebaseConfig = {
-  apiKey: "PASTE_API_KEY",
-  authDomain: "PASTE_PROJECT.firebaseapp.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE.appspot.com",
-  messagingSenderId: "PASTE_SENDER_ID",
-  appId: "PASTE_APP_ID"
-};
-
-// ====== 2) إعدادات البريد (لإرسال رمز التحقق للإيميل) ======
-const emailjsConfig = {
-  serviceId: "service_8zoimoj",
-  templateId: "template_3b1d8fa",
-  publicKey: "hjG9xad9xyU4S-Hh7"
-};
+// الإعدادات (Firebase و EmailJS) أصبحت في ملف منفصل: config.js
+// ضع مفاتيحك هناك مرة واحدة فقط - لا تعد نسخها هنا أبداً
 
 // ====== الفرق ======
 const TEAMS = ["التقنية", "المبيعات", "الموارد البشرية", "التمويل", "التسويق"];
@@ -25,17 +12,27 @@ const TEAMS = ["التقنية", "المبيعات", "الموارد البشر�
 // ====== رصيد الإجازات ======
 const BALANCE = { annual: 30, sick: 30 };
 
+// ====== قراءة الإعدادات من config.js بأمان ======
+// لو فيه خطأ في config.js (مثل سطر initializeApp زائد) ما يطيح الموقع كامل
+let fbCfg = null, mailCfg = null;
+try { fbCfg = firebaseConfig; } catch (e) { fbCfg = null; }
+try { mailCfg = emailjsConfig; } catch (e) { mailCfg = null; }
+if (!fbCfg || !mailCfg) {
+  alert("تنبيه: ملف config.js فيه خطأ أو ناقص.\nلازم يحتوي فقط على firebaseConfig و emailjsConfig بدون أي سطر إضافي مثل initializeApp");
+}
+
 // ====== اكتشاف الوضع تلقائياً ======
-const useFirebase = !Object.values(firebaseConfig).some(v => v.startsWith("PASTE"));
-const emailReady = !Object.values(emailjsConfig).some(v => v.startsWith("PASTE"));
+const isFilled = (cfg) => !!cfg && !Object.values(cfg).some(v => String(v).startsWith("PASTE"));
+const useFirebase = isFilled(fbCfg);
+const emailReady = isFilled(mailCfg);
 let db = null;
 
 if (useFirebase) {
-  firebase.initializeApp(firebaseConfig);
+  firebase.initializeApp(fbCfg);
   db = firebase.firestore();
 }
 if (emailReady) {
-  emailjs.init({ publicKey: emailjsConfig.publicKey });
+  emailjs.init({ publicKey: mailCfg.publicKey });
 }
 
 /* ================== طبقة البيانات ================== */
@@ -45,52 +42,90 @@ async function getAllUsers() {
     const snap = await db.collection("users").get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
-  const users = JSON.parse(localStorage.getItem("lv_users") || "[]");
-  let changed = false;
-  users.forEach((u, i) => { if (!u.id) { u.id = "u" + Date.now() + "_" + i; changed = true; } });
-  if (changed) localStorage.setItem("lv_users", JSON.stringify(users));
-  return users;
-}
-
-// تحديث بيانات مستخدم (مثلاً تغيير الدور)
-async function updateUser(id, patch) {
-  if (useFirebase) {
-    await db.collection("users").doc(String(id)).update(patch);
-  } else {
-    const users = await getAllUsers();
-    const u = users.find(x => String(x.id) === String(id));
-    if (u) { Object.assign(u, patch); localStorage.setItem("lv_users", JSON.stringify(users)); }
-  }
+  return JSON.parse(localStorage.getItem("lv_users") || "[]");
 }
 
 async function findUserByName(name) {
   const users = await getAllUsers();
-  return users.find(u => u.name.toLowerCase() === name.trim().toLowerCase());
+  return users.find(u => (u.name || "").toLowerCase() === name.trim().toLowerCase());
 }
 
 async function findUserByLogin(id) {
   const users = await getAllUsers();
   const key = id.trim().toLowerCase();
-  return users.find(u => u.email.toLowerCase() === key || u.name.toLowerCase() === key);
+  return users.find(u => (u.email || "").toLowerCase() === key || (u.name || "").toLowerCase() === key);
 }
 
 async function saveUser(user) {
   if (useFirebase) {
     await db.collection("users").add(user);
   } else {
+    if (!user.id) user.id = user.email;
     const users = await getAllUsers();
     users.push(user);
     localStorage.setItem("lv_users", JSON.stringify(users));
   }
 }
 
-// الإجازات
-async function getAllLeaves() {
+// تحديث صلاحية مستخدم (من شاشة الإدارة)
+async function updateUserRole(user, newRole) {
   if (useFirebase) {
-    const snap = await db.collection("leaves").orderBy("created_at", "desc").get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    await db.collection("users").doc(user.id).update({ role: newRole });
+  } else {
+    const users = JSON.parse(localStorage.getItem("lv_users") || "[]");
+    const i = users.findIndex(u => String(u.id || u.email).toLowerCase() === String(user.id || user.email).toLowerCase());
+    if (i > -1) {
+      users[i].role = newRole;
+      localStorage.setItem("lv_users", JSON.stringify(users));
+    }
   }
-  return JSON.parse(localStorage.getItem("lv_leaves") || "[]");
+  // لو الأدمن غيّر صلاحيته هو نفسه نحدّث القائمة فوراً
+  if (currentUser && (currentUser.email || "").toLowerCase() === (user.email || "").toLowerCase()) {
+    currentUser.role = newRole;
+    $("approvalsNav").style.display = newRole === "manager" || newRole === "admin" ? "inline-block" : "none";
+    $("adminNav").style.display = newRole === "admin" ? "inline-block" : "none";
+  }
+}
+
+/* ====== الإجازات + التحديث اللحظي (Realtime) ======
+   مع الفايربيس: أي تغيير (طلب جديد، موافقة، رفض) يوصل لكل الأجهزة
+   المفتوحة فوراً بدون تحديث الصفحة.
+   في الوضع التجريبي (بدون فايربيس): التحديث يتم بعد كل عملية كالمعتاد. */
+let leavesCache = [];
+let leavesUnsub = null;
+
+function getAllLeaves() {
+  return leavesCache;
+}
+
+// تشغيل الاستماع اللحظي على مجموعة الإجازات
+function startLeavesListener() {
+  if (!useFirebase) {
+    leavesCache = JSON.parse(localStorage.getItem("lv_leaves") || "[]");
+    return;
+  }
+  if (leavesUnsub) leavesUnsub();
+  leavesUnsub = db.collection("leaves").orderBy("created_at", "desc")
+    .onSnapshot(snap => {
+      leavesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      onLeavesChanged();
+    }, err => {
+      alert("تعذر قراءة الإجازات من Firebase: " + err.message +
+        "\nتأكد أن قواعد Firestore (Rules) تسمح بالقراءة والكتابة");
+    });
+}
+
+function stopLeavesListener() {
+  if (leavesUnsub) { leavesUnsub(); leavesUnsub = null; }
+  leavesCache = [];
+}
+
+// إعادة رسم الشاشات المعتمدة على الإجازات عند أي تغيير
+function onLeavesChanged() {
+  if (typeof loadMyLeaves === "function") loadMyLeaves();
+  const active = document.querySelector(".nav-btn.active");
+  if (active && active.dataset.sec === "calendar" && typeof renderCalendar === "function") renderCalendar();
+  if (active && active.dataset.sec === "approvals" && typeof renderApprovals === "function") renderApprovals();
 }
 
 async function saveLeave(leave) {
@@ -98,10 +133,11 @@ async function saveLeave(leave) {
   if (useFirebase) {
     await db.collection("leaves").add(leave);
   } else {
-    const leaves = await getAllLeaves();
+    const leaves = getAllLeaves();
     leave.id = Date.now();
     leaves.push(leave);
     localStorage.setItem("lv_leaves", JSON.stringify(leaves));
+    onLeavesChanged();
   }
 }
 
@@ -109,9 +145,13 @@ async function updateLeave(id, patch) {
   if (useFirebase) {
     await db.collection("leaves").doc(String(id)).update(patch);
   } else {
-    const leaves = await getAllLeaves();
+    const leaves = getAllLeaves();
     const i = leaves.findIndex(l => String(l.id) === String(id));
-    if (i > -1) { Object.assign(leaves[i], patch); localStorage.setItem("lv_leaves", JSON.stringify(leaves)); }
+    if (i > -1) {
+      Object.assign(leaves[i], patch);
+      localStorage.setItem("lv_leaves", JSON.stringify(leaves));
+      onLeavesChanged();
+    }
   }
 }
 
@@ -119,18 +159,19 @@ async function deleteLeave(id) {
   if (useFirebase) {
     await db.collection("leaves").doc(String(id)).delete();
   } else {
-    const leaves = await getAllLeaves();
-    localStorage.setItem("lv_leaves", JSON.stringify(leaves.filter(l => String(l.id) !== String(id))));
+    leavesCache = leavesCache.filter(l => String(l.id) !== String(id));
+    localStorage.setItem("lv_leaves", JSON.stringify(leavesCache));
+    onLeavesChanged();
   }
 }
 
 // إرسال رمز التحقق إلى البريد
+// نرسل البريد باسمين (email و to_email) حتى يشتغل مع أي إعداد في خانة To Email بقالب EmailJS
 async function sendOtpEmail(email, name, code) {
-  if (!emailReady) return false;
-  await emailjs.send(emailjsConfig.serviceId, emailjsConfig.templateId, {
-    email: email, to_name: name, passcode: code
+  if (!emailReady) throw new Error("إعدادات EmailJS غير موجودة في config.js");
+  await emailjs.send(mailCfg.serviceId, mailCfg.templateId, {
+    email: email, to_email: email, name: name, to_name: name, passcode: code
   });
-  return true;
 }
 
 /* ================== كلمة المرور ================== */
@@ -150,7 +191,12 @@ const $ = (id) => document.getElementById(id);
 let currentUser = null;
 let pendingUser = null;
 let pendingOtp = null;
-let otpMode = "register";
+let otpMode = null; // "register" = حساب جديد، "login" = تسجيل دخول
+
+// إظهار أي خطأ غير متوقع (مثل رفض Firebase) بدل ما يفشل الزر بصمت
+window.addEventListener("unhandledrejection", (e) => {
+  alert("حدث خطأ: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
+});
 
 function showScreen(name) {
   $("authScreen").style.display = name === "auth" ? "flex" : "none";
@@ -197,50 +243,54 @@ $("registerForm").addEventListener("submit", async (e) => {
   const dup = await findUserByName(name);
   if (dup) { $("regError").textContent = "الاسم مستخدم مسبقاً، اختر اسماً آخر"; return; }
 
-  // أول مستخدم في قاعدة البيانات يصبح مدير عام تلقائياً
-  const existing = await getAllUsers();
-  const role = (existing.length === 0) ? "admin" : "member";
-  pendingUser = { name, email, team, password, role, verified: false };
+  // أول مستخدم يفتح النظام بدون أدمن يصير أدمن تلقائياً
+  const existingUsers = await getAllUsers();
+  const hasAdmin = existingUsers.some(u => u.role === "admin");
+  pendingUser = { name, email, team, password, role: hasAdmin ? "member" : "admin", verified: false };
+  otpMode = "register";
 
-  await startOtp(pendingUser, "register");
+  await startOtpFlow(email, name);
 });
 
-/* ===== إرسال رمز التحقق (تسجيل أو دخول) ===== */
-
-async function startOtp(user, mode) {
-  otpMode = mode;
-  pendingUser = user;
-  pendingOtp = String(Math.floor(100000 + Math.random() * 900000));
+// توليد الرمز وإرساله بالبريد (تسجيل جديد أو تسجيل دخول)
+// الرمز يُرسل بالبريد فقط - لا يوجد وضع تجريبي
+async function startOtpFlow(email, name) {
+  pendingOtp = null;
+  $("otpError").textContent = "";
+  $("otpHint").textContent = "جاري إرسال الرمز إلى " + email;
   $("otpSending").style.display = "block";
-
-  let sent = false, sendErr = "";
-  try { sent = await sendOtpEmail(user.email, user.name, pendingOtp); }
-  catch (err) { sent = false; sendErr = (err && (err.text || err.message)) ? String(err.text || err.message) : "خطأ غير معروف"; }
-
-  $("otpSending").style.display = "none";
-  $("otpHint").textContent = "أدخل الرمز المكون من 6 أرقام المرسل إلى " + user.email;
-  if (!sent) {
-    // فشل الإرسال بالبريد - نعرض السبب فقط ويمكن إعادة المحاولة
-    $("otpHint").textContent = "تعذر إرسال الرمز إلى بريدك (السبب: " + sendErr + ") - جرّب إعادة إرسال الرمز";
-  }
   showScreen("otp");
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  try {
+    await sendOtpEmail(email, name, code);
+    pendingOtp = code;
+    $("otpHint").textContent = "أدخل الرمز المكون من 6 أرقام المرسل إلى " + email;
+  } catch (err) {
+    // نعرض سبب الفشل الحقيقي من EmailJS
+    $("otpError").textContent = "تعذر إرسال الرمز: " + (err.text || err.message || err) + " - اضغط إعادة إرسال الرمز";
+  }
+  $("otpSending").style.display = "none";
 }
 
 /* ===== التحقق من الرمز ===== */
 
 $("otpVerifyBtn").addEventListener("click", async () => {
   $("otpError").textContent = "";
-  if ($("otpInput").value !== pendingOtp) { $("otpError").textContent = "الرمز غير صحيح"; return; }
+  if (!pendingOtp || $("otpInput").value.trim() !== pendingOtp) { $("otpError").textContent = "الرمز غير صحيح"; return; }
 
   $("otpInput").value = "";
+  // عند التسجيل الجديد نحفظ الحساب، وعند تسجيل الدخول الحساب محفوظ مسبقاً
   if (otpMode === "register") {
+    otpMode = null;
     pendingUser.verified = true;
     await saveUser({ ...pendingUser, created_at: new Date().toISOString() });
   }
   enterApp(pendingUser);
 });
 
-$("otpResendBtn").addEventListener("click", async () => { await startOtp(pendingUser, otpMode); });
+// إعادة الإرسال: رمز جديد يُرسل للبريد
+$("otpResendBtn").addEventListener("click", () => startOtpFlow(pendingUser.email, pendingUser.name));
 
 /* ===== تسجيل الدخول ===== */
 
@@ -253,24 +303,31 @@ $("loginForm").addEventListener("submit", async (e) => {
     $("loginError").textContent = "بيانات الدخول غير صحيحة";
     return;
   }
-  // رمز تحقق على البريد قبل الدخول
-  await startOtp(user, "login");
+  // تسجيل الدخول يتطلب رمز تحقق أيضاً
+  pendingUser = user;
+  otpMode = "login";
+  await startOtpFlow(user.email, user.name);
 });
 
 /* ===== الجلسة والدخول للتطبيق ===== */
 
 function enterApp(user) {
   currentUser = user;
+  localStorage.setItem("lv_session", user.email || user.name);
   $("userChip").textContent = "أهلاً، " + user.name + " (" + user.team + ")";
-  const isManager = user.role === "manager" || user.role === "admin";
+  const isManager = user.role === "manager" || user.role === "admin" || !useFirebase;
   $("approvalsNav").style.display = isManager ? "inline-block" : "none";
-  const adminNavBtn = $("adminNav");
-  if (adminNavBtn) adminNavBtn.style.display = (user.role === "admin") ? "inline-block" : "none";
+  $("adminNav").style.display = user.role === "admin" ? "inline-block" : "none";
   showScreen("app");
+  startLeavesListener();
   if (window.systemInit) systemInit();
 }
 
 $("logoutBtn").addEventListener("click", () => {
+  localStorage.removeItem("lv_session");
+  stopLeavesListener();
   currentUser = null;
   showScreen("auth");
 });
+
+// الجلسة لا تُستعاد: كل مرة يفتح فيها المستخدم الموقع يطلب تسجيل دخول من جديد

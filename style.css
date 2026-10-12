@@ -124,11 +124,6 @@ th { color: var(--muted); font-weight: 600; }
 .empty { text-align: center; color: var(--muted); padding: 24px; }
 .btn.danger { background: rgba(239,68,68,.15); color: #ef4444; }
 .sending { color: var(--muted); font-size: 13px; margin-top: 10px; text-align: center; }
-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
-.role-select {
-  background: var(--bg); color: var(--text); border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: 13px;
-}
 
 /* الرصيد */
 .balances { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
