@@ -1,3 +1,4 @@
+@charset "UTF-8";
 /* ====== الثيم الداكن - نفس هوية نظام الإجازات ====== */
 :root {
   --bg: #0a0a0a;
@@ -34,11 +35,13 @@ body {
 .card.full { max-width: 860px; }
 
 .logo { text-align: center; margin-bottom: 24px; }
-.logo-circle {
-  width: 56px; height: 56px; margin: 0 auto 12px;
-  background: var(--primary); color: #fff;
-  border-radius: 14px; display: flex; align-items: center; justify-content: center;
-  font-weight: bold; font-size: 20px;
+.logo-img {
+  width: 76px; height: 76px; margin: 0 auto 12px; display: block;
+  background: #fff; border-radius: 16px; padding: 6px; object-fit: contain;
+}
+.brand-logo {
+  width: 26px; height: 26px; margin-left: 6px; vertical-align: middle;
+  background: #fff; border-radius: 6px; padding: 2px; object-fit: contain;
 }
 .logo h1 { font-size: 20px; }
 .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
@@ -90,7 +93,7 @@ body {
 /* الشريط العلوي والتنقل */
 #appScreen { min-height: 100vh; }
 .topbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 24px; background: var(--card); border-bottom: 1px solid var(--border); }
-.brand { font-weight: bold; }
+.brand { font-weight: bold; display: flex; align-items: center; }
 .nav { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
 .nav-btn {
   padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
@@ -142,12 +145,32 @@ th { color: var(--muted); font-weight: 600; }
 .lg-item { display: inline-flex; align-items: center; gap: 4px; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .cal-wd { text-align: center; font-size: 12px; color: var(--muted); padding: 6px 0; }
+.cal-grid { background: transparent; }
 .cal-cell {
-  min-height: 76px; background: var(--bg); border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px; font-size: 11px; display: flex; flex-direction: column; gap: 3px;
+  min-height: 96px; background: #1a1a1a; border: 1px solid #3a3a3a;
+  border-radius: 8px; padding: 6px; font-size: 11px; display: flex; flex-direction: column; gap: 4px;
 }
-.cal-cell.today { border-color: var(--primary); }
-.cal-day { font-size: 12px; color: var(--muted); font-weight: 600; }
-.chip { color: #fff; border-radius: 6px; padding: 2px 6px; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chip-pending { opacity: 0.75; outline: 1px dashed #fff; }
-.more { color: var(--muted); font-size: 10px; }
+.cal-cell.weekend { background: #101010; }
+.cal-cell.today { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30,111,217,.35); }
+.cal-day { font-size: 12px; color: #e5e5e5; font-weight: 700; }
+.chip {
+  background: var(--bgc, rgba(148,163,184,.22));
+  color: var(--fgc, #e5e7eb);
+  border: 1px solid var(--cc, #94a3b8);
+  border-radius: 5px; padding: 2px 6px; font-size: 10.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chip-pending { border-style: dashed; opacity: 0.9; }
+.more { color: #d4d4d4; font-size: 10px; font-weight: 600; }
+@media (max-width: 720px) {
+  .cal-cell { min-height: 78px; }
+  .chip { font-size: 10px; padding: 1px 4px; }
+}
+
+/* تلميح الرصيد تحت النموذج */
+.hint { color: var(--muted); font-size: 12px; margin: 6px 0 4px; }
+
+/* إضافة قسم جديد */
+.add-team-row { display: flex; align-items: flex-end; }
+.add-team-row .btn { margin-top: 0; }
+#teamsList { gap: 10px; }

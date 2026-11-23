@@ -6,11 +6,12 @@
 // الإعدادات (Firebase و EmailJS) أصبحت في ملف منفصل: config.js
 // ضع مفاتيحك هناك مرة واحدة فقط - لا تعد نسخها هنا أبداً
 
-// ====== الفرق ======
-const TEAMS = ["التقنية", "المبيعات", "الموارد البشرية", "التمويل", "التسويق"];
-
-// ====== رصيد الإجازات ======
-const BALANCE = { annual: 30, sick: 30 };
+// ====== الأقسام: قائمة أساسية + أي قسم يضيفه الأدمن ======
+const DEFAULT_TEAMS = [
+  "التقنية", "المبيعات", "الموارد البشرية", "التمويل", "التسويق",
+  "الإنتاج", "اللوجستيك", "الجودة", "خدمة العملاء", "المشتريات", "المستودعات", "الشؤون القانونية"
+];
+let TEAMS = DEFAULT_TEAMS.slice();
 
 // ====== قراءة الإعدادات من config.js بأمان ======
 // لو فيه خطأ في config.js (مثل سطر initializeApp زائد) ما يطيح الموقع كامل
@@ -204,8 +205,48 @@ function showScreen(name) {
   $("appScreen").style.display = name === "app" ? "block" : "none";
 }
 
-// تعبئة قائمة الفرق
-$("regTeam").innerHTML = TEAMS.map(t => `<option value="${t}">${t}</option>`).join("");
+// ====== تعبئة قائمة الأقسام + إضافة قسم جديد ======
+function fillTeamSelect() {
+  $("regTeam").innerHTML = TEAMS.map(t => `<option value="${t}">${t}</option>`).join("");
+}
+
+// تحميل الأقسام المضافة من قاعدة البيانات (تُخزن في مجموعة teams)
+async function loadTeams() {
+  try {
+    if (useFirebase) {
+      const snap = await db.collection("teams").get();
+      const names = snap.docs.map(d => d.data().name).filter(Boolean);
+      TEAMS = DEFAULT_TEAMS.concat(names.filter(n => !DEFAULT_TEAMS.includes(n)));
+    } else {
+      const saved = JSON.parse(localStorage.getItem("lv_teams") || "[]");
+      TEAMS = DEFAULT_TEAMS.concat(saved.filter(n => !DEFAULT_TEAMS.includes(n)));
+    }
+  } catch (e) {
+    TEAMS = DEFAULT_TEAMS.slice();
+  }
+  fillTeamSelect();
+}
+
+// إضافة قسم جديد (من شاشة الإدارة)
+async function addTeam(name) {
+  const clean = String(name || "").trim();
+  if (!clean) return false;
+  if (TEAMS.includes(clean)) return false;
+
+  if (useFirebase) {
+    await db.collection("teams").add({ name: clean, created_at: new Date().toISOString() });
+  } else {
+    const saved = JSON.parse(localStorage.getItem("lv_teams") || "[]");
+    saved.push(clean);
+    localStorage.setItem("lv_teams", JSON.stringify(saved));
+  }
+  TEAMS.push(clean);
+  fillTeamSelect();
+  return true;
+}
+
+fillTeamSelect();
+loadTeams();
 
 // التبويبات
 document.querySelectorAll(".tab").forEach(tab => {

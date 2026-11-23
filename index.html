@@ -12,7 +12,7 @@
   <div id="authScreen" class="screen">
     <div class="card">
       <div class="logo">
-        <div class="logo-circle">AI</div>
+        <img class="logo-img" src="https://media.base44.com/images/public/6aa654af759804e0759585cb/0b14ac49a_almrai.png" alt="Almarai" />
         <h1>نظام إجازات الفريق</h1>
         <p class="subtitle">Almarai LeaveTracker</p>
       </div>
@@ -81,7 +81,10 @@
   <!-- ============ التطبيق بعد الدخول ============ -->
   <div id="appScreen" style="display:none">
     <header class="topbar">
-      <div class="brand">نظام إجازات الفريق</div>
+      <div class="brand">
+        <img class="brand-logo" src="https://media.base44.com/images/public/6aa654af759804e0759585cb/0b14ac49a_almrai.png" alt="Almarai" />
+        نظام إجازات الفريق
+      </div>
       <nav class="nav" id="mainNav">
         <button class="nav-btn active" data-sec="home">حجز إجازة</button>
         <button class="nav-btn" data-sec="balance">رصيدي</button>
@@ -125,8 +128,9 @@
               <input type="file" id="lvAttachment" accept="image/*,.pdf" />
             </div>
             <div class="span2">
+              <p class="hint" id="leaveHint"></p>
               <div id="leaveError" class="error"></div>
-              <button type="submit" class="btn primary">إرسال الطلب للموافقة</button>
+              <button type="submit" class="btn primary" id="leaveSubmitBtn">إرسال الطلب للموافقة</button>
             </div>
           </form>
         </div>
@@ -150,7 +154,7 @@
         <div class="card full">
           <h2>رصيدي</h2>
           <div class="balances" id="balancesBox"></div>
-          <p class="subtitle">السنوية 30 يوماً + 10 أعياد رسمية - المرضية: أول 30 يوم براتب كامل، 60 يوم بـ75% من الراتب، 30 يوم بدون راتب - يُخصم الرصيد عند الموافقة فقط</p>
+          <p class="subtitle">الرصيد يُحسب لكل سنة على حدة: الموافق عليه + المعلّق يُخصمان من الحد السنوي، والطلبات المرفوضة لا تُخصم - المرضية: أول 30 يوم براتب كامل، 60 يوم بـ75% من الراتب، 30 يوم بدون راتب</p>
         </div>
       </section>
 
@@ -200,6 +204,21 @@
             </table>
           </div>
         </div>
+
+        <div class="card full">
+          <h2>الأقسام</h2>
+          <p class="subtitle">أضف أقساماً جديدة لتظهر في قائمة اختيار الفريق عند التسجيل وفي تقويم الفريق</p>
+          <div class="grid2">
+            <div>
+              <label>اسم القسم الجديد</label>
+              <input type="text" id="newTeamName" placeholder="مثال: الأمن والسلامة" />
+            </div>
+            <div class="add-team-row">
+              <button id="addTeamBtn" class="btn primary">إضافة قسم</button>
+            </div>
+          </div>
+          <div class="legend" id="teamsList"></div>
+        </div>
       </section>
 
     </main>
@@ -209,8 +228,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script src="config.js"></script>
-  <script src="app.js"></script>
-  <script src="system.js"></script>
+  <script charset="utf-8" src="config.js"></script>
+  <script charset="utf-8" src="app.js"></script>
+  <script charset="utf-8" src="system.js"></script>
 </body>
 </html>
